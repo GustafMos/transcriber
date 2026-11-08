@@ -23,6 +23,10 @@
   <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 5v14M15.5 5v14"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5.2v13.6L19 12z"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17.5" cy="9" r="2.3"/><path d="M16 14.6a4.6 4.6 0 0 1 4.5 4.4"/></symbol>
 </svg>
 
 <div class="app">
@@ -114,7 +118,57 @@
         <div class="speaker-bar">
           <span class="label">Speaker</span>
           <div class="chips" id="speakers"></div>
+          <button class="btn diarize-btn" id="diarizeBtn" type="button" title="Detect who spoke when">
+            <svg><use href="#i-users"/></svg><span>Auto-detect speakers</span>
+          </button>
         </div>
+
+        <section class="ai-card" id="aiCard" aria-label="AI assistant">
+          <button class="ai-head" id="aiToggle" type="button" aria-expanded="true" aria-controls="aiBody">
+            <svg class="ai-chev"><use href="#i-chev"/></svg>
+            <svg class="ai-spark"><use href="#i-spark"/></svg>
+            <span class="ai-title">AI assistant</span>
+            <span class="ai-dot" id="aiDot" aria-hidden="true"></span>
+          </button>
+
+          <div class="ai-body" id="aiBody">
+            <div class="ai-row">
+              <label class="ai-label" for="aiModel">Model</label>
+              <input type="text" id="aiModel" class="ai-input ai-model" list="aiModels" value="llama3.2" autocomplete="off" spellcheck="false" aria-label="Ollama model">
+              <datalist id="aiModels"></datalist>
+              <button class="btn" id="aiRefresh" type="button" title="List models installed in Ollama">
+                <svg><use href="#i-refresh"/></svg><span>Refresh</span>
+              </button>
+            </div>
+
+            <div class="ai-actions">
+              <button class="btn" id="aiSummarize" type="button">Summarize</button>
+              <button class="btn" id="aiActionItems" type="button">Action items</button>
+              <button class="btn" id="aiCategorize" type="button">Categorize</button>
+            </div>
+
+            <div class="ai-row">
+              <input type="text" id="aiPrompt" class="ai-input ai-prompt" placeholder="Ask about this transcript…" autocomplete="off" aria-label="Ask the AI assistant">
+              <button class="btn primary" id="aiAsk" type="button">Ask</button>
+            </div>
+
+            <pre class="ai-output empty" id="aiOutput" aria-live="polite">Responses appear here.</pre>
+
+            <div class="ai-output-actions">
+              <button class="btn" id="aiCopy" type="button" disabled>
+                <svg><use href="#i-copy"/></svg><span>Copy</span>
+              </button>
+              <button class="btn" id="aiInsert" type="button" disabled>
+                <svg><use href="#i-plus"/></svg><span>Insert as line</span>
+              </button>
+            </div>
+
+            <div class="ai-status-line">
+              <span class="ai-status" id="aiStatus">idle</span>
+              <span class="ai-used" id="aiUsed"></span>
+            </div>
+          </div>
+        </section>
 
         <div class="segments" id="segments" aria-live="polite"></div>
 

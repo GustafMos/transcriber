@@ -617,6 +617,187 @@ svg { display: block; }
 .chip.add svg { width: 11px; height: 11px; }
 .chip.add:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
 
+/* ---------------------------------------------------------------- diarization */
+
+.diarize-btn {
+  margin-left: auto;
+  height: 28px;
+  padding: 0 11px;
+  font-size: 11.5px;
+}
+.diarize-btn svg { width: 13px; height: 13px; }
+.diarize-btn.busy {
+  border-color: rgba(94, 234, 212, 0.4);
+  background: rgba(94, 234, 212, 0.08);
+  color: var(--accent);
+}
+.diarize-btn.busy:disabled { opacity: 1; cursor: progress; }
+.diarize-btn.busy svg { animation: aiPulse 1s ease-in-out infinite; }
+
+/* ---------------------------------------------------------------- AI assistant */
+
+.ai-card {
+  flex: none;
+  margin: 10px 16px 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    radial-gradient(460px 150px at 100% 0%, rgba(94, 234, 212, 0.055), transparent 70%),
+    rgba(9, 14, 20, 0.52);
+  overflow: hidden;
+}
+
+.ai-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 15px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.ai-head:hover { background: rgba(255, 255, 255, 0.03); }
+.ai-head:focus-visible { outline: 2px solid rgba(94, 234, 212, 0.55); outline-offset: -2px; }
+
+.ai-chev {
+  width: 13px;
+  height: 13px;
+  color: var(--dim);
+  flex: none;
+  transition: transform 0.16s ease;
+}
+.ai-card.open .ai-chev { transform: rotate(90deg); }
+
+.ai-spark { width: 15px; height: 15px; color: var(--accent); flex: none; }
+.ai-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.ai-dot {
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dim);
+  flex: none;
+}
+.ai-dot.busy {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(94, 234, 212, 0.6);
+  animation: aiPulse 1s ease-in-out infinite;
+}
+.ai-dot.bad {
+  background: var(--danger);
+  box-shadow: 0 0 8px rgba(255, 107, 127, 0.5);
+}
+@keyframes aiPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.ai-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 0 15px 13px;
+}
+
+.ai-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.ai-input {
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: 0;
+  background: rgba(8, 13, 19, 0.6);
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ai-input::placeholder { color: var(--dim); }
+.ai-input:focus {
+  border-color: rgba(94, 234, 212, 0.42);
+  box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.08);
+}
+
+.ai-model {
+  width: 190px;
+  max-width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.ai-prompt { flex: 1; min-width: 160px; }
+
+.ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ai-output {
+  margin: 0;
+  min-height: 54px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(8, 13, 19, 0.6);
+  color: #dbe6f1;
+  font-family: var(--font);
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ai-output.empty { color: var(--dim); font-style: italic; }
+
+.ai-output-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ai-status-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 15px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+.ai-status.busy { color: var(--accent); }
+.ai-status.bad { color: var(--danger); }
+.ai-used {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
 /* ---------------------------------------------------------------- segments */
 
 .segments {
@@ -910,6 +1091,7 @@ svg { display: block; }
   .title-input { font-size: 20px; }
   .live-card { margin: 12px 12px 0; padding: 13px; gap: 13px; }
   .speaker-bar { padding: 11px 14px 8px; }
+  .ai-card { margin: 10px 12px 0; }
   .segments { padding: 4px 7px 8px; }
   .add-row { padding: 10px 12px 12px; }
 }

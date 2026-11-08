@@ -5,6 +5,8 @@ A self-contained, **browser-based speech-to-text tool** that runs entirely on yo
 - 🎙️ **Live transcription** — capture the microphone and get text as you speak.
 - 📁 **Transcribe recordings** — upload an existing audio/video file (mp3, m4a, wav, ogg, flac, …).
 - 👥 **Speaker tags** — label who is talking, edit anything after the fact.
+- ✨ **AI assistant** — summarize, extract action items, categorize, or ask questions, via a local [Ollama](https://ollama.com) model.
+- 🗣️ **Speaker diarization** — optional automatic "who spoke when" (via [pyannote.audio](https://github.com/pyannote/pyannote-audio)).
 - 💾 **Auto-saves locally** — transcripts are kept in your browser with a history list, plus copy / export `.md` / export `.txt`.
 
 ## Requirements
@@ -57,6 +59,43 @@ browser (Transcriber UI)  ──http──▶  whisper-server (127.0.0.1:8080)
 - Audio is captured in the browser, resampled to 16 kHz mono WAV, and posted to the local whisper server, which returns the text.
 
 Everything runs locally — the audio never leaves your machine.
+
+## AI assistant (Ollama)
+
+The AI panel summarizes, extracts action items, categorizes, or answers questions — entirely locally via [Ollama](https://ollama.com).
+
+1. Install Ollama from <https://ollama.com/download> and pull a small model:
+   ```
+   ollama pull llama3.2
+   ```
+2. Make sure Ollama is running (`ollama serve`), then open the **AI assistant** panel in the app and set the model name (default `llama3.2`).
+
+The web server proxies `/ollama/*` to Ollama automatically. If Ollama isn't running, the panel shows a clear message.
+
+## Speaker diarization (optional)
+
+Automatic "who spoke when" uses [pyannote.audio](https://github.com/pyannote/pyannote-audio). It's a Python ML stack, and its models are gated on HuggingFace, so this is an opt-in, heavier setup:
+
+1. Install Python 3.10+.
+2. Install the dependencies:
+   ```
+   pip install -r server/requirements.txt
+   ```
+3. Create a free account at <https://huggingface.co>, accept the license for `pyannote/speaker-diarization-3.1`, and create an access token.
+4. Run the service with your token in the environment:
+   ```
+   # macOS / Linux
+   export HF_TOKEN=hf_...
+   python server/diarize.py
+   ```
+   ```
+   # Windows (PowerShell)
+   $env:HF_TOKEN="hf_..."
+   python server/diarize.py
+   ```
+5. Use **Auto-detect speakers** in the app.
+
+> Diarization runs best on a GPU; on CPU it works but is slow. The service listens on `http://127.0.0.1:8765`.
 
 ## Choosing a model
 

@@ -1,4 +1,5 @@
 const WHISPER_URL = 'http://127.0.0.1:8080';
+const DIARIZE_URL = 'http://127.0.0.1:8765';
 
 /* Transcriber — standalone, dependency-free local Whisper front-end. */
 (function () {
@@ -11,6 +12,15 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
   const FILE_CHUNK_SECONDS = 30;
   const STORAGE_KEY = 'transcriber.v1';
   const DEFAULT_SPEAKERS = ['Speaker 1', 'Speaker 2'];
+  const AI_DEFAULT_MODEL = 'llama3.2';
+  const AI_DOWN_MESSAGE = 'Ollama is not running — start it (ollama serve) and pull a model';
+  const AI_PROMPTS = {
+    summarize: 'You are a transcription assistant. Summarize the following transcript concisely, preserving key facts, names, decisions and timestamps.',
+    actions: 'You are a transcription assistant. Extract action items, decisions, and follow-ups from the following transcript as a short bulleted list.',
+    categorize: 'You are a transcription assistant. Categorize the transcript into a few labelled topic sections and return a short outline.',
+    ask: 'You are a transcription assistant answering questions about the transcript.'
+  };
+  const DIARIZE_DOWN_MESSAGE = 'Diarization service not running — start server/diarize.py';
 
   // ---------------------------------------------------------------- utility layer
   function el(tag, attrs, children) {
@@ -136,7 +146,9 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
       transcripts: [{ id: id, title: 'Untitled', created: now, updated: now, segments: [] }],
       speakers: DEFAULT_SPEAKERS.slice(),
       activeSpeaker: DEFAULT_SPEAKERS[0],
-      selectedId: id
+      selectedId: id,
+      aiModel: AI_DEFAULT_MODEL,
+      aiOpen: true
     };
   }
 
@@ -176,6 +188,10 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
     out.selectedId = out.transcripts.some(function (t) { return t.id === raw.selectedId; })
       ? raw.selectedId
       : (out.transcripts[0] ? out.transcripts[0].id : null);
+    out.aiModel = typeof raw.aiModel === 'string' && raw.aiModel.trim()
+      ? raw.aiModel.trim()
+      : AI_DEFAULT_MODEL;
+    out.aiOpen = raw.aiOpen !== false;
     return out;
   }
 
@@ -199,6 +215,9 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
   let backendOnline = null;
   let fileBusy = false;
   let progressText = '';
+  let aiBusy = false;
+  let aiReply = '';
+  let diarizeBusy = false;
 
   function current() {
     if (!state.selectedId) return null;
@@ -252,6 +271,24 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
     segments: document.getElementById('segments'),
     addInput: document.getElementById('addInput'),
     addBtn: document.getElementById('addBtn'),
+    aiCard: document.getElementById('aiCard'),
+    aiToggle: document.getElementById('aiToggle'),
+    aiBody: document.getElementById('aiBody'),
+    aiModel: document.getElementById('aiModel'),
+    aiModels: document.getElementById('aiModels'),
+    aiRefresh: document.getElementById('aiRefresh'),
+    aiSummarize: document.getElementById('aiSummarize'),
+    aiActionItems: document.getElementById('aiActionItems'),
+    aiCategorize: document.getElementById('aiCategorize'),
+    aiPrompt: document.getElementById('aiPrompt'),
+    aiAsk: document.getElementById('aiAsk'),
+    aiOutput: document.getElementById('aiOutput'),
+    aiCopy: document.getElementById('aiCopy'),
+    aiInsert: document.getElementById('aiInsert'),
+    aiStatus: document.getElementById('aiStatus'),
+    aiUsed: document.getElementById('aiUsed'),
+    aiDot: document.getElementById('aiDot'),
+    diarizeBtn: document.getElementById('diarizeBtn'),
     fileInput: document.getElementById('fileInput'),
     toasts: document.getElementById('toasts'),
     modalRoot: document.getElementById('modalRoot')
@@ -535,6 +572,7 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
     paintSpeakers();
     paintSegments(true);
     paintLive();
+    paintAiOpen();
   }
 
   function renderAll() {
@@ -859,7 +897,10 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
     sinceFlush: 0,
     totalSamples: 0,
     queue: Promise.resolve(),
-    session: null
+    session: null,
+    fullAudio: [],
+    fullRate: 0,
+    filePcm: null
   };
 
   function liveElapsed() {
@@ -1003,6 +1044,9 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
     capture.overlap = null;
     capture.sinceFlush = 0;
     capture.totalSamples = 0;
+    capture.fullAudio = [];
+    capture.fullRate = 0;
+    capture.filePcm = null;
     capture.queue = Promise.resolve();
     capture.session = { id: transcriptId, prevText: '', lastText: '', pending: 0 };
     setInterim('');
@@ -1042,6 +1086,7 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
       capture.source = source;
       capture.processor = processor;
       capture.rate = ctx.sampleRate;
+      capture.fullRate = ctx.sampleRate;
 
       processor.onaudioprocess = function (e) {
         if (!live.recording || live.paused || !capture.ctx) return;
@@ -1060,6 +1105,7 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
           for (let i = 0; i < length; i++) mono[i] /= channels;
         }
         capture.blocks.push(mono);
+        capture.fullAudio.push(mono);
         capture.totalSamples += length;
         capture.sinceFlush += length;
         if (capture.sinceFlush >= capture.rate * LIVE_CHUNK_SECONDS) flushChunk();
@@ -1138,6 +1184,7 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
 
     try {
       const buffer = await readFileBuffer(file);
+      capture.filePcm = null;
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) throw new Error('AudioContext unavailable');
       ctx = new AudioCtx();
@@ -1145,6 +1192,7 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
       const mono = downmix(audio);
       const pcm = resampleTo16k(mono, audio.sampleRate);
       if (!pcm.length) throw new Error('empty audio');
+      capture.filePcm = pcm;
 
       const chunkLength = SAMPLE_RATE * FILE_CHUNK_SECONDS;
       const total = Math.max(1, Math.ceil(pcm.length / chunkLength));
@@ -1254,6 +1302,368 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
     }
   }
 
+  // ---------------------------------------------------------------- AI assistant
+  function aiModelName() {
+    return String(state.aiModel || '').trim() || AI_DEFAULT_MODEL;
+  }
+
+  function aiTranscriptText(t) {
+    return (t.segments || []).map(function (seg) {
+      return '[' + fmtClock(seg.ts) + '] ' + (seg.speaker || 'Speaker 1') + ': ' + (seg.text || '');
+    }).join('\n');
+  }
+
+  function setAiStatus(text, mode) {
+    if (ui.aiStatus) {
+      ui.aiStatus.textContent = text;
+      ui.aiStatus.className = 'ai-status' + (mode ? ' ' + mode : '');
+    }
+    if (ui.aiDot) ui.aiDot.className = 'ai-dot' + (mode ? ' ' + mode : '');
+  }
+
+  function setAiUsed(model) {
+    if (ui.aiUsed) ui.aiUsed.textContent = model ? 'model: ' + model : '';
+  }
+
+  function paintAiOpen() {
+    const open = state.aiOpen !== false;
+    if (ui.aiCard) ui.aiCard.classList.toggle('open', open);
+    if (ui.aiBody) ui.aiBody.hidden = !open;
+    if (ui.aiToggle) ui.aiToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function setAiReply(text) {
+    aiReply = String(text || '').trim();
+    if (ui.aiOutput) {
+      ui.aiOutput.textContent = aiReply || 'Responses appear here.';
+      ui.aiOutput.classList.toggle('empty', !aiReply);
+    }
+    setAiControls();
+  }
+
+  function setAiControls() {
+    [ui.aiSummarize, ui.aiActionItems, ui.aiCategorize, ui.aiAsk].forEach(function (btn) {
+      if (btn) btn.disabled = aiBusy;
+    });
+    if (ui.aiCopy) ui.aiCopy.disabled = aiBusy || !aiReply;
+    if (ui.aiInsert) ui.aiInsert.disabled = aiBusy || !aiReply;
+  }
+
+  async function ollamaChat(model, system, user) {
+    let res;
+    try {
+      res = await fetch('/ollama/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user }
+          ],
+          stream: false
+        })
+      });
+    } catch (e) {
+      const err = new Error('network');
+      err.network = true;
+      throw err;
+    }
+    if (!res || !res.ok) {
+      const err = new Error('HTTP ' + (res ? res.status : '?'));
+      err.status = res ? res.status : 0;
+      throw err;
+    }
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      throw new Error('Ollama returned invalid JSON');
+    }
+    const content = data && data.message && typeof data.message.content === 'string'
+      ? data.message.content
+      : '';
+    if (!content.trim()) throw new Error('Ollama returned an empty reply');
+    return content;
+  }
+
+  function reportAiFailure(error) {
+    const status = error && error.status;
+    if ((error && error.network) || status === 502 || status === 503) {
+      setAiStatus(AI_DOWN_MESSAGE, 'bad');
+      toast(AI_DOWN_MESSAGE, { type: 'error', duration: 6000 });
+      return;
+    }
+    const detail = error && error.message ? error.message : 'request failed';
+    setAiStatus('error — ' + detail, 'bad');
+    toast('AI request failed: ' + detail, { type: 'error', duration: 5000 });
+  }
+
+  async function runAi(kind) {
+    if (aiBusy) return;
+    const t = current();
+    if (!t) return;
+
+    const transcript = aiTranscriptText(t);
+    if (!transcript.trim()) {
+      toast('Nothing to send yet.');
+      return;
+    }
+
+    let question = '';
+    if (kind === 'ask') {
+      question = ui.aiPrompt ? ui.aiPrompt.value.trim() : '';
+      if (!question) {
+        toast('Type a question first.');
+        if (ui.aiPrompt) ui.aiPrompt.focus();
+        return;
+      }
+    }
+
+    const model = aiModelName();
+    state.aiModel = model;
+    if (ui.aiModel) ui.aiModel.value = model;
+    save();
+
+    const system = AI_PROMPTS[kind] || AI_PROMPTS.ask;
+    const user = kind === 'ask'
+      ? 'Question: ' + question + '\n\nTranscript:\n' + transcript
+      : 'Transcript:\n' + transcript;
+
+    aiBusy = true;
+    setAiControls();
+    setAiStatus('working…', 'busy');
+    setAiUsed(model);
+
+    try {
+      const reply = await ollamaChat(model, system, user);
+      setAiReply(reply);
+      setAiStatus('idle');
+      toast('Reply ready.', { type: 'success' });
+    } catch (e) {
+      reportAiFailure(e);
+    } finally {
+      aiBusy = false;
+      setAiControls();
+    }
+  }
+
+  async function refreshAiModels() {
+    if (ui.aiRefresh) ui.aiRefresh.disabled = true;
+    try {
+      let res;
+      try {
+        res = await fetch('/ollama/api/tags', { cache: 'no-store' });
+      } catch (e) {
+        const err = new Error('network');
+        err.network = true;
+        throw err;
+      }
+      if (!res || !res.ok) {
+        const err = new Error('HTTP ' + (res ? res.status : '?'));
+        err.status = res ? res.status : 0;
+        throw err;
+      }
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        throw new Error('Ollama returned invalid JSON');
+      }
+
+      const names = Array.isArray(data && data.models) ? data.models.map(function (m) {
+        return m && typeof m.name === 'string' ? m.name : '';
+      }).filter(Boolean) : [];
+
+      if (ui.aiModels) {
+        ui.aiModels.innerHTML = '';
+        names.forEach(function (name) {
+          ui.aiModels.appendChild(el('option', { value: name, text: name }));
+        });
+      }
+
+      if (names.length) {
+        setAiStatus('idle');
+        toast('Found ' + names.length + ' model' + (names.length === 1 ? '' : 's') + '.', { type: 'success' });
+      } else {
+        setAiStatus('no models installed — pull one (ollama pull ' + aiModelName() + ')', 'bad');
+        toast('No models installed. Pull one with: ollama pull ' + aiModelName(), { duration: 6000 });
+      }
+    } catch (e) {
+      reportAiFailure(e);
+    } finally {
+      if (ui.aiRefresh) ui.aiRefresh.disabled = false;
+    }
+  }
+
+  function insertAiReply() {
+    if (aiBusy || !aiReply) return;
+    const t = current();
+    if (!t) return;
+    const last = t.segments.length ? t.segments[t.segments.length - 1].ts : 0;
+    const ts = live.recording && live.transcriptId === t.id ? liveElapsed() : last;
+    t.segments.push({
+      id: uid('seg'),
+      ts: Math.max(0, Math.round(ts)),
+      speaker: state.activeSpeaker,
+      text: aiReply
+    });
+    t.updated = Date.now();
+    save();
+    paintSegments(true);
+    paintList();
+    paintMeta();
+    toast('AI reply added to the transcript.', { type: 'success' });
+  }
+
+  // ---------------------------------------------------------------- speaker diarization
+  function paintDiarize() {
+    if (!ui.diarizeBtn) return;
+    ui.diarizeBtn.disabled = diarizeBusy;
+    ui.diarizeBtn.classList.toggle('busy', diarizeBusy);
+    const label = ui.diarizeBtn.querySelector('span');
+    if (label) label.textContent = diarizeBusy ? 'Detecting speakers…' : 'Auto-detect speakers';
+    ui.diarizeBtn.title = diarizeBusy ? 'Detecting speakers…' : 'Detect who spoke when';
+  }
+
+  function diarizeSpeakerName(raw) {
+    const text = String(raw == null ? '' : raw).trim();
+    const match = /^speaker[_\s-]*(\d+)$/i.exec(text);
+    if (match) return 'Speaker ' + (parseInt(match[1], 10) + 1);
+    return text || 'Speaker 1';
+  }
+
+  function diarizeSourceWav() {
+    if (capture.fullAudio.length) {
+      const mono = concatFloat32(capture.fullAudio);
+      if (mono.length) {
+        const rate = capture.fullRate || capture.rate || SAMPLE_RATE;
+        return new Blob(
+          [encodeWav(floatToInt16(resampleTo16k(mono, rate)), SAMPLE_RATE)],
+          { type: 'audio/wav' }
+        );
+      }
+    }
+    if (capture.filePcm && capture.filePcm.length) {
+      return new Blob(
+        [encodeWav(floatToInt16(capture.filePcm), SAMPLE_RATE)],
+        { type: 'audio/wav' }
+      );
+    }
+    return null;
+  }
+
+  // A line belongs to the latest turn (by start time) whose [start, end] range
+  // contains its timestamp; lines that fall in silence keep their speaker.
+  function applyDiarization(t, turns) {
+    if (!t || !turns.length) return 0;
+    const sorted = turns.slice().sort(function (a, b) { return a.start - b.start; });
+    let changed = 0;
+    t.segments.forEach(function (seg) {
+      const sec = Math.max(0, Number(seg.ts) || 0) / 1000;
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const turn = sorted[i];
+        if (sec >= turn.start && sec <= turn.end) {
+          if (seg.speaker !== turn.speaker) {
+            seg.speaker = turn.speaker;
+            changed++;
+          }
+          return;
+        }
+      }
+    });
+    return changed;
+  }
+
+  async function detectSpeakers() {
+    if (diarizeBusy) return;
+    const wav = diarizeSourceWav();
+    if (!wav) {
+      toast('Record or transcribe a file first.');
+      return;
+    }
+
+    const t = current();
+    diarizeBusy = true;
+    paintDiarize();
+
+    try {
+      const form = new FormData();
+      form.append('file', wav, 'audio.wav');
+
+      let res;
+      try {
+        res = await fetch(DIARIZE_URL + '/diarize', { method: 'POST', body: form });
+      } catch (e) {
+        toast(DIARIZE_DOWN_MESSAGE, { type: 'error', duration: 6000 });
+        return;
+      }
+
+      if (!res || !res.ok) {
+        let detail = '';
+        if (res && res.status >= 400 && res.status < 500) {
+          try {
+            const body = await res.json();
+            detail = body && body.error ? String(body.error) : '';
+          } catch (e) { detail = ''; }
+        }
+        toast(detail ? 'Diarization failed: ' + detail : DIARIZE_DOWN_MESSAGE, {
+          type: 'error',
+          duration: detail ? 5000 : 6000
+        });
+        return;
+      }
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        toast('Diarization service returned invalid JSON.', { type: 'error' });
+        return;
+      }
+
+      const raw = data && Array.isArray(data.segments) ? data.segments : [];
+      const turns = [];
+      raw.forEach(function (item) {
+        if (!item) return;
+        const start = Number(item.start);
+        const end = Number(item.end);
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return;
+        turns.push({ start: start, end: end, speaker: diarizeSpeakerName(item.speaker) });
+      });
+
+      if (!turns.length) {
+        toast('No speakers detected.');
+        return;
+      }
+
+      const names = [];
+      turns.forEach(function (turn) {
+        if (names.indexOf(turn.speaker) < 0) names.push(turn.speaker);
+        if (state.speakers.indexOf(turn.speaker) < 0) state.speakers.push(turn.speaker);
+      });
+
+      if (t) {
+        const changed = applyDiarization(t, turns);
+        if (changed) t.updated = Date.now();
+      }
+
+      save();
+      if (t) {
+        cancelActiveEdit();
+        paintSpeakers();
+        paintSegments();
+        paintList();
+        paintMeta();
+      }
+
+      toast('Detected ' + names.length + ' speaker' + (names.length === 1 ? '' : 's') + '.', { type: 'success' });
+    } finally {
+      diarizeBusy = false;
+      paintDiarize();
+    }
+  }
+
   // ---------------------------------------------------------------- wiring
   const saveTitle = debounce(function () {
     const t = current();
@@ -1336,6 +1746,46 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addLine(); }
   });
 
+  if (ui.aiToggle) {
+    ui.aiToggle.addEventListener('click', function () {
+      state.aiOpen = state.aiOpen === false;
+      paintAiOpen();
+      save();
+    });
+  }
+
+  if (ui.aiModel) {
+    ui.aiModel.addEventListener('input', function () {
+      state.aiModel = ui.aiModel.value;
+      save();
+    });
+    ui.aiModel.addEventListener('blur', function () {
+      const model = aiModelName();
+      ui.aiModel.value = model;
+      state.aiModel = model;
+      save();
+    });
+    ui.aiModel.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); ui.aiModel.blur(); }
+    });
+  }
+
+  if (ui.aiSummarize) ui.aiSummarize.addEventListener('click', function () { runAi('summarize'); });
+  if (ui.aiActionItems) ui.aiActionItems.addEventListener('click', function () { runAi('actions'); });
+  if (ui.aiCategorize) ui.aiCategorize.addEventListener('click', function () { runAi('categorize'); });
+  if (ui.aiAsk) ui.aiAsk.addEventListener('click', function () { runAi('ask'); });
+  if (ui.aiPrompt) {
+    ui.aiPrompt.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runAi('ask'); }
+    });
+  }
+  if (ui.aiRefresh) ui.aiRefresh.addEventListener('click', refreshAiModels);
+  if (ui.aiCopy) ui.aiCopy.addEventListener('click', function () {
+    if (aiReply) copyText(aiReply, 'AI reply copied to clipboard.');
+  });
+  if (ui.aiInsert) ui.aiInsert.addEventListener('click', insertAiReply);
+  if (ui.diarizeBtn) ui.diarizeBtn.addEventListener('click', detectSpeakers);
+
   // ---------------------------------------------------------------- init
   if (!ui.transcriptList) {
     // The markup is missing; there is nothing sensible to do.
@@ -1346,6 +1796,12 @@ const WHISPER_URL = 'http://127.0.0.1:8080';
   saveNow();
   renderAll();
   paintLive();
+  paintAiOpen();
+  if (ui.aiModel) ui.aiModel.value = aiModelName();
+  setAiUsed(aiModelName());
+  setAiStatus('idle');
+  setAiReply('');
+  paintDiarize();
   checkBackend();
 
   // Keep the elapsed clock warm even when nothing else changes.
