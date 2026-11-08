@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0f14">
+<title>Transcriber — local speech to text</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3M9 21h6"/></symbol>
+  <symbol id="i-mic-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5.5A3 3 0 0 1 15 5v6"/><path d="M9 9.5V13a3 3 0 0 0 4.8 2.4"/><path d="M5 11a7 7 0 0 0 10.8 5.9M19 11a7 7 0 0 1-.4 2.3"/><path d="M12 18v3M9 21h6"/><path d="M3 3l18 18"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/><path d="M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 5v14M15.5 5v14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5.2v13.6L19 12z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></symbol>
+</svg>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"><svg><use href="#i-mic"/></svg></span>
+      <div class="brand-text">
+        <h1>Transcriber</h1>
+        <p>Local speech-to-text for meetings, interviews, and recordings.</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span class="save-state" title="Transcripts are saved in this browser">
+        <i class="save-dot"></i>
+        <span id="saveText">Saved</span>
+      </span>
+      <button class="btn primary" id="newBtn" type="button" title="Create a new transcript">
+        <svg><use href="#i-plus"/></svg><span>New transcript</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel sidebar" aria-label="Transcripts">
+      <div class="side-head">
+        <span class="side-title">Transcripts</span>
+        <span class="side-count" id="sideCount">0</span>
+      </div>
+      <div class="search-field">
+        <svg><use href="#i-search"/></svg>
+        <input type="search" id="searchInput" placeholder="Search transcripts…" autocomplete="off" aria-label="Search transcripts">
+      </div>
+      <div class="tlist" id="transcriptList"></div>
+    </aside>
+
+    <section class="panel workspace" aria-label="Active transcript">
+
+      <div class="ws" id="ws">
+        <div class="ws-head">
+          <input type="text" id="titleInput" class="title-input" placeholder="Untitled transcript" autocomplete="off" aria-label="Transcript title">
+          <div class="ws-meta" id="wsMeta"></div>
+          <div class="toolbar">
+            <button class="btn" id="copyBtn" type="button" title="Copy plain text to the clipboard">
+              <svg><use href="#i-copy"/></svg><span>Copy</span>
+            </button>
+            <button class="btn gold" id="mdBtn" type="button" title="Download this transcript as Markdown">
+              <svg><use href="#i-download"/></svg><span>Export .md</span>
+            </button>
+            <button class="btn gold" id="txtBtn" type="button" title="Download this transcript as plain text">
+              <svg><use href="#i-download"/></svg><span>Export .txt</span>
+            </button>
+            <button class="icon-btn danger" id="delBtn" type="button" title="Delete transcript" aria-label="Delete transcript">
+              <svg><use href="#i-trash"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="live-card">
+          <button class="mic-btn" id="micBtn" type="button" title="Start recording" aria-label="Start recording">
+            <svg><use href="#i-mic"/></svg>
+          </button>
+
+          <div class="live-mid">
+            <div class="status-line">
+              <span class="rec-dot" id="recDot" aria-hidden="true"></span>
+              <strong id="liveStatus">Ready</strong>
+              <span class="clock-wrap">
+                <svg><use href="#i-clock"/></svg>
+                <span class="clock" id="clock">00:00</span>
+              </span>
+            </div>
+            <div class="backend-line">Backend: <span class="backend-state checking" id="backend">checking…</span></div>
+            <div class="interim" id="interim" aria-live="polite"></div>
+          </div>
+
+          <div class="live-right">
+            <div class="live-buttons">
+              <button class="btn" id="pauseBtn" type="button" disabled title="Pause recording">
+                <svg><use href="#i-pause"/></svg><span>Pause</span>
+              </button>
+              <button class="btn" id="fileBtn" type="button" title="Transcribe an audio or video recording">
+                <svg><use href="#i-upload"/></svg><span>Transcribe a recording</span>
+              </button>
+            </div>
+            <div class="progress" id="progress" hidden></div>
+          </div>
+        </div>
+
+        <div class="speaker-bar">
+          <span class="label">Speaker</span>
+          <div class="chips" id="speakers"></div>
+        </div>
+
+        <div class="segments" id="segments" aria-live="polite"></div>
+
+        <div class="add-row">
+          <input type="text" id="addInput" class="add-input" placeholder="Type a line…" autocomplete="off" aria-label="Add a line">
+          <button class="btn primary" id="addBtn" type="button" title="Add line">
+            <svg><use href="#i-plus"/></svg><span>Add</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="ws-empty" id="wsEmpty" hidden>
+        <div class="empty-glyph"><svg><use href="#i-mic"/></svg></div>
+        <h2>No transcript selected</h2>
+        <p>Create a transcript to start recording or typing.</p>
+        <button class="btn primary" id="emptyNewBtn" type="button">
+          <svg><use href="#i-plus"/></svg><span>New transcript</span>
+        </button>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<input type="file" id="fileInput" accept="audio/*,video/*" hidden>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div id="modalRoot"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

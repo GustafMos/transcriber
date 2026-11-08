@@ -1,0 +1,11 @@
+# Downloaded/built backend (whisper.cpp binary + model) — not part of the repo
+backend/
+models/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
