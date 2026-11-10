@@ -4,6 +4,7 @@ A self-contained, **browser-based speech-to-text tool** that runs entirely on yo
 
 - 🎙️ **Live transcription** — capture the microphone and get text as you speak.
 - 📁 **Transcribe recordings** — upload an existing audio/video file (mp3, m4a, wav, ogg, flac, …).
+- 🌍 **Language selection** — pick the spoken language (or auto-detect) from the top bar.
 - 👥 **Speaker tags** — label who is talking, edit anything after the fact.
 - ✨ **AI assistant** — summarize, extract action items, categorize, or ask questions, via a local [Ollama](https://ollama.com) model.
 - 🗣️ **Speaker diarization** — optional automatic "who spoke when" (via [pyannote.audio](https://github.com/pyannote/pyannote-audio)).

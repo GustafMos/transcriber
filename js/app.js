@@ -14,6 +14,26 @@ const DIARIZE_URL = 'http://127.0.0.1:8765';
   const DEFAULT_SPEAKERS = ['Speaker 1', 'Speaker 2'];
   const AI_DEFAULT_MODEL = 'llama3.2';
   const AI_DOWN_MESSAGE = 'Ollama is not running — start it (ollama serve) and pull a model';
+  // Whisper's supported languages (code:name). "auto" lets the backend detect.
+  const LANGUAGES = ('en:English,zh:Chinese,de:German,es:Spanish,ru:Russian,ko:Korean,' +
+    'fr:French,ja:Japanese,pt:Portuguese,tr:Turkish,pl:Polish,ca:Catalan,nl:Dutch,' +
+    'ar:Arabic,sv:Swedish,it:Italian,id:Indonesian,hi:Hindi,fi:Finnish,vi:Vietnamese,' +
+    'he:Hebrew,uk:Ukrainian,el:Greek,ms:Malay,cs:Czech,ro:Romanian,da:Danish,hu:Hungarian,' +
+    'ta:Tamil,no:Norwegian,th:Thai,ur:Urdu,hr:Croatian,bg:Bulgarian,lt:Lithuanian,la:Latin,' +
+    'mi:Maori,ml:Malayalam,cy:Welsh,sk:Slovak,te:Telugu,fa:Persian,lv:Latvian,bn:Bengali,' +
+    'sr:Serbian,az:Azerbaijani,sl:Slovenian,kn:Kannada,et:Estonian,mk:Macedonian,br:Breton,' +
+    'eu:Basque,is:Icelandic,hy:Armenian,ne:Nepali,mn:Mongolian,bs:Bosnian,kk:Kazakh,sq:Albanian,' +
+    'sw:Swahili,gl:Galician,mr:Marathi,pa:Punjabi,si:Sinhala,km:Khmer,sn:Shona,yo:Yoruba,' +
+    'so:Somali,af:Afrikaans,oc:Occitan,ka:Georgian,be:Belarusian,tg:Tajik,sd:Sindhi,' +
+    'gu:Gujarati,am:Amharic,yi:Yiddish,lo:Lao,uz:Uzbek,fo:Faroese,ht:Haitian Creole,' +
+    'ps:Pashto,tk:Turkmen,nn:Nynorsk,mt:Maltese,sa:Sanskrit,lb:Luxembourgish,my:Burmese,' +
+    'bo:Tibetan,tl:Tagalog,mg:Malagasy,as:Assamese,tt:Tatar,haw:Hawaiian,ln:Lingala,' +
+    'ha:Hausa,ba:Bashkir,jw:Javanese,su:Sundanese,yue:Cantonese')
+    .split(',').map(function (pair) {
+      const bits = pair.split(':');
+      return { code: bits[0], name: bits[1] };
+    });
+  const DEFAULT_LANGUAGE = 'auto';
   const AI_PROMPTS = {
     summarize: 'You are a transcription assistant. Summarize the following transcript concisely, preserving key facts, names, decisions and timestamps.',
     actions: 'You are a transcription assistant. Extract action items, decisions, and follow-ups from the following transcript as a short bulleted list.',
@@ -148,7 +168,8 @@ const DIARIZE_URL = 'http://127.0.0.1:8765';
       activeSpeaker: DEFAULT_SPEAKERS[0],
       selectedId: id,
       aiModel: AI_DEFAULT_MODEL,
-      aiOpen: true
+      aiOpen: true,
+      language: DEFAULT_LANGUAGE
     };
   }
 
@@ -192,6 +213,10 @@ const DIARIZE_URL = 'http://127.0.0.1:8765';
       ? raw.aiModel.trim()
       : AI_DEFAULT_MODEL;
     out.aiOpen = raw.aiOpen !== false;
+    out.language = typeof raw.language === 'string' && raw.language !== 'auto' &&
+      LANGUAGES.some(function (lang) { return lang.code === raw.language; })
+      ? raw.language
+      : (raw.language === 'auto' ? 'auto' : DEFAULT_LANGUAGE);
     return out;
   }
 
@@ -264,6 +289,7 @@ const DIARIZE_URL = 'http://127.0.0.1:8765';
     liveStatus: document.getElementById('liveStatus'),
     clock: document.getElementById('clock'),
     backend: document.getElementById('backend'),
+    languageSelect: document.getElementById('languageSelect'),
     interim: document.getElementById('interim'),
     fileBtn: document.getElementById('fileBtn'),
     progress: document.getElementById('progress'),
@@ -743,6 +769,7 @@ const DIARIZE_URL = 'http://127.0.0.1:8765';
     try {
       const form = new FormData();
       form.append('file', new Blob([wav], { type: 'audio/wav' }), 'chunk.wav');
+      form.append('language', state.language || 'auto');
       res = await fetch(WHISPER_URL + '/inference', { method: 'POST', body: form });
     } catch (e) {
       backendOnline = false;
@@ -1307,6 +1334,14 @@ const DIARIZE_URL = 'http://127.0.0.1:8765';
     return String(state.aiModel || '').trim() || AI_DEFAULT_MODEL;
   }
 
+  function languageLabel(code) {
+    if (!code || code === 'auto') return 'Auto-detect';
+    for (let i = 0; i < LANGUAGES.length; i++) {
+      if (LANGUAGES[i].code === code) return LANGUAGES[i].name;
+    }
+    return code;
+  }
+
   function aiTranscriptText(t) {
     return (t.segments || []).map(function (seg) {
       return '[' + fmtClock(seg.ts) + '] ' + (seg.speaker || 'Speaker 1') + ': ' + (seg.text || '');
@@ -1790,6 +1825,21 @@ const DIARIZE_URL = 'http://127.0.0.1:8765';
   if (!ui.transcriptList) {
     // The markup is missing; there is nothing sensible to do.
     return;
+  }
+
+  if (ui.languageSelect) {
+    const autoOption = new Option('Auto-detect', 'auto');
+    ui.languageSelect.innerHTML = '';
+    ui.languageSelect.appendChild(autoOption);
+    for (let i = 0; i < LANGUAGES.length; i++) {
+      ui.languageSelect.appendChild(new Option(LANGUAGES[i].name, LANGUAGES[i].code));
+    }
+    ui.languageSelect.value = state.language;
+    ui.languageSelect.addEventListener('change', function () {
+      state.language = ui.languageSelect.value;
+      save();
+      toast('Spoken language: ' + languageLabel(state.language), { type: 'success' });
+    });
   }
 
   // Seed/persist the current shape on first run.
