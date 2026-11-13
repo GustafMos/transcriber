@@ -117,3 +117,10 @@ English-only variants (`ggml-small.en.bin`, etc.) are smaller/faster for English
 - The backend is **whisper.cpp**; GPU backends are Metal (macOS), CUDA (NVIDIA), and Vulkan (AMD/Intel), with CPU as a universal fallback.
 - Transcripts live in your browser's `localStorage` — clear your browser data to wipe them.
 - The Windows installer downloads prebuilt binaries from the whisper.cpp nightly builds; macOS/Linux build from source.
+
+## Support my cats
+
+If you want to support me and my projects, help me fund tasty anti-allergenic food for my two cats, **Carla-Mittersteig von Starhemberg** and **Rosa-Luxemburg von Starhemberg**. <3 Thank you!
+
+**Ko-fi:** <https://ko-fi.com/ripscorpy> · [FUNDING.md](FUNDING.md)
+
